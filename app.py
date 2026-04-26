@@ -39,18 +39,16 @@ st.markdown("""
 # ==========================================
 @st.cache_resource
 def load_models():
-    translator = Translator()
 
-    # Smaller model for cloud deployment
     summarizer = pipeline(
         "summarization",
         model="sshleifer/distilbart-cnn-12-6"
     )
 
-    return translator, summarizer
+    return summarizer
 
 
-translator, summarizer = load_models()
+summarizer = load_models()
 
 # ==========================================
 # LOAD CSV BAD WORDS
@@ -128,10 +126,10 @@ def contains_hindi(text):
 
 def translate_text(text, target):
     try:
-        return translator.translate(
-            text,
-            dest=target
-        ).text
+        return GoogleTranslator(
+            source="auto",
+            target=target
+        ).translate(text)
     except:
         return text
 
