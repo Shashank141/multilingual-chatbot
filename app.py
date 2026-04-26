@@ -1,6 +1,6 @@
 import streamlit as st
 from transformers import pipeline
-from googletrans import Translator
+from deep_translator import GoogleTranslator
 from indic_transliteration import sanscript
 from indic_transliteration.sanscript import transliterate
 import pandas as pd
