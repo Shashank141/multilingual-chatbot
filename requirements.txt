@@ -1,7 +1,7 @@
 streamlit
 transformers
 torch
-googletrans==4.0.0rc1
+deep-translator
 indic-transliteration
 pandas
 sentencepiece
