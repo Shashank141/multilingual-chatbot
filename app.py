@@ -38,13 +38,13 @@ st.markdown("""
 @st.cache_resource
 def load_model():
     summarizer = pipeline(
-        "summarization",
-        model="sshleifer/distilbart-cnn-12-6"
+        task="summarization",
+        model="sshleifer/distilbart-cnn-12-6",
+        tokenizer="sshleifer/distilbart-cnn-12-6"
     )
     return summarizer
 
 summarizer = load_model()
-
 # ==========================================
 # LOAD CSV BAD WORDS
 # ==========================================
