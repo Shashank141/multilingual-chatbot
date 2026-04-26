@@ -15,38 +15,41 @@ st.set_page_config(
 )
 
 # ==========================================
-# CUSTOM CSS
+# CSS
 # ==========================================
 st.markdown("""
 <style>
-.main {
-    background-color: #0e1117;
-}
-.stTextArea textarea {
-    font-size: 16px;
-}
-.big-font {
-    font-size: 28px !important;
-    font-weight: bold;
-}
+.main { background-color: #0e1117; }
+.stTextArea textarea { font-size: 16px; }
+.big-font { font-size: 28px !important; font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# LOAD MODEL
+# MODEL LOADING (SAFE + FALLBACK)
 # ==========================================
 @st.cache_resource
 def load_model():
-    summarizer = pipeline(
-        task="summarization",
-        model="sshleifer/distilbart-cnn-12-6",
-        tokenizer="sshleifer/distilbart-cnn-12-6"
-    )
-    return summarizer
+    try:
+        return pipeline(
+            "summarization",
+            model="sshleifer/distilbart-cnn-6-6",
+            device=-1
+        )
+    except:
+        return None
 
 summarizer = load_model()
+
 # ==========================================
-# LOAD CSV BAD WORDS
+# FALLBACK SUMMARIZER (NO ML CRASH OPTION)
+# ==========================================
+def simple_summary(text, max_sentences=3):
+    sentences = re.split(r'(?<=[.!?]) +', text)
+    return " ".join(sentences[:max_sentences])
+
+# ==========================================
+# LOAD BAD WORDS CSV
 # ==========================================
 csv_file = "english_hindi_badwords_500.csv"
 
@@ -66,16 +69,12 @@ def load_bad_words():
             )
 
             return list(set(words))
-        else:
-            return []
+        return []
     except:
         return []
 
 csv_bad_words = load_bad_words()
 
-# ==========================================
-# DEFAULT BAD WORDS
-# ==========================================
 default_bad_words = [
     "idiot", "stupid", "damn",
     "moron", "fool", "useless",
@@ -93,43 +92,34 @@ def contains_hindi(text):
 
 def translate_text(text, target):
     try:
-        return GoogleTranslator(
-            source="auto",
-            target=target
-        ).translate(text)
+        return GoogleTranslator(source="auto", target=target).translate(text)
     except:
         return text
 
 def summarize_text(text):
-    words = len(text.split())
-
-    if words < 30:
+    if len(text.split()) < 30:
         return text
-
-    max_len = min(120, words)
-    min_len = max(20, words // 2)
 
     try:
-        result = summarizer(
-            text,
-            max_length=max_len,
-            min_length=min_len,
-            do_sample=False
-        )
-
-        return result[0]["summary_text"]
-
+        if summarizer:
+            words = len(text.split())
+            return summarizer(
+                text,
+                max_length=min(120, words),
+                min_length=max(20, words // 2),
+                do_sample=False
+            )[0]["summary_text"]
+        else:
+            return simple_summary(text)
     except:
-        return text
+        return simple_summary(text)
 
 def detect_bad_words(text):
-    found = []
     text = text.lower()
+    found = []
 
     for word in all_bad_words:
-        pattern = r"\b" + re.escape(word) + r"\b"
-
-        if re.search(pattern, text):
+        if re.search(r"\b" + re.escape(word) + r"\b", text):
             found.append(word)
 
     return list(set(found))
@@ -137,87 +127,61 @@ def detect_bad_words(text):
 # ==========================================
 # UI
 # ==========================================
-st.markdown(
-    '<p class="big-font">🤖 Multilingual Summarization Chatbot</p>',
-    unsafe_allow_html=True
-)
+st.markdown('<p class="big-font">🤖 Multilingual Summarization Chatbot</p>', unsafe_allow_html=True)
 
-st.write(
-    "Supports **English, Hindi, Hinglish**  \n"
-    "Includes **Bad Word Detection** using CSV dataset."
-)
+st.write("Supports English, Hindi, Hinglish + Bad Word Detection")
 
-# CSV Status
+# CSV status
 if csv_bad_words:
-    st.success(f"CSV Loaded Successfully ({len(csv_bad_words)} words)")
+    st.success(f"CSV Loaded ({len(csv_bad_words)} words)")
 else:
-    st.warning("CSV file not found. Keep english_hindi_badwords_500.csv in same folder.")
+    st.warning("CSV not found (using default list)")
 
 # Input
-text = st.text_area(
-    "Enter Text Here:",
-    height=220,
-    placeholder="Type paragraph here..."
-)
+text = st.text_area("Enter Text:", height=200)
 
-# Language
-output_lang = st.selectbox(
-    "Choose Output Language",
-    ["English", "Hindi", "Hinglish"]
-)
+# Output language
+output_lang = st.selectbox("Output Language", ["English", "Hindi", "Hinglish"])
 
 # ==========================================
-# BUTTON
+# MAIN BUTTON
 # ==========================================
 if st.button("Generate Summary 🚀"):
 
-    if text.strip() == "":
-        st.warning("Please enter some text.")
+    if not text.strip():
+        st.warning("Please enter text")
         st.stop()
 
-    working = text
-
-    # Hindi/Hinglish → English
-    if contains_hindi(text):
-        working = translate_text(text, "en")
-
-    else:
-        working = translate_text(text, "en")
+    # ALWAYS translate to English first
+    working = translate_text(text, "en")
 
     # Summarize
-    with st.spinner("Generating Summary..."):
+    with st.spinner("Processing..."):
         summary = summarize_text(working)
 
-    # Convert Output Language
+    # Output conversion
     if output_lang == "Hindi":
         summary = translate_text(summary, "hi")
 
     elif output_lang == "Hinglish":
         summary = translate_text(summary, "hi")
-
-        summary = (
-            summary
-            .replace("है", "hai")
-            .replace("और", "aur")
-            .replace("का", "ka")
-            .replace("हैं", "hain")
-        )
+        summary = summary.replace("है", "hai").replace("और", "aur")
 
     # Output
     st.subheader("📌 Summary")
     st.success(summary)
 
-    # Safety Check
-    st.subheader("🛡 Language Safety Check")
+    # Safety check
+    st.subheader("🛡 Safety Check")
 
     bad_words = detect_bad_words(text)
 
     if bad_words:
-        st.error("⚠ Unparliamentary Language Detected")
+        st.error("Unparliamentary language detected")
         st.write(bad_words)
     else:
-        st.info("No unparliamentary language detected.")
+        st.info("Clean input detected")
 
 # Footer
 st.markdown("---")
-st.caption("Developed using Streamlit + Transformers + NLP")
+st.caption("Streamlit + Transformers + NLP Project")
