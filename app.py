@@ -1,8 +1,6 @@
 import streamlit as st
 from transformers import pipeline
 from deep_translator import GoogleTranslator
-from indic_transliteration import sanscript
-from indic_transliteration.sanscript import transliterate
 import pandas as pd
 import re
 import os
@@ -28,27 +26,24 @@ st.markdown("""
     font-size: 16px;
 }
 .big-font {
-    font-size:22px !important;
-    font-weight:bold;
+    font-size: 28px !important;
+    font-weight: bold;
 }
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# LOAD MODELS (DEPLOY FRIENDLY)
+# LOAD MODEL
 # ==========================================
 @st.cache_resource
-def load_models():
-
+def load_model():
     summarizer = pipeline(
         "summarization",
         model="sshleifer/distilbart-cnn-12-6"
     )
-
     return summarizer
 
-
-summarizer = load_models()
+summarizer = load_model()
 
 # ==========================================
 # LOAD CSV BAD WORDS
@@ -59,7 +54,7 @@ csv_file = "english_hindi_badwords_500.csv"
 def load_bad_words():
     try:
         if os.path.exists(csv_file):
-            df = pd.read_csv(csv_file, encoding="utf-8")
+            df = pd.read_csv(csv_file)
 
             words = (
                 df["word"]
@@ -73,56 +68,28 @@ def load_bad_words():
             return list(set(words))
         else:
             return []
-
     except:
         return []
-
 
 csv_bad_words = load_bad_words()
 
 # ==========================================
-# KEYWORDS
+# DEFAULT BAD WORDS
 # ==========================================
-hinglish_keywords = [
-    "kal", "hai", "mera", "tum", "hum",
-    "bhai", "acha", "kya", "nahi",
-    "haan", "kamina", "chutiya"
-]
-
-# ==========================================
-# BACKUP WORDS
-# ==========================================
-english_bad = [
+default_bad_words = [
     "idiot", "stupid", "damn",
-    "fool", "moron", "useless"
-]
-
-hindi_bad = [
+    "moron", "fool", "useless",
+    "chutiya", "kamina",
     "बेवकूफ", "हरामी"
 ]
 
-hinglish_bad = [
-    "chutiya", "kamina"
-]
-
-all_bad_words = list(set(
-    english_bad +
-    hindi_bad +
-    hinglish_bad +
-    csv_bad_words
-))
+all_bad_words = list(set(default_bad_words + csv_bad_words))
 
 # ==========================================
 # FUNCTIONS
 # ==========================================
-def is_hinglish(text):
-    text = text.lower()
-    return any(word in text for word in hinglish_keywords)
-
-
 def contains_hindi(text):
     return any("\u0900" <= c <= "\u097F" for c in text)
-
 
 def translate_text(text, target):
     try:
@@ -132,7 +99,6 @@ def translate_text(text, target):
         ).translate(text)
     except:
         return text
-
 
 def summarize_text(text):
     words = len(text.split())
@@ -155,7 +121,6 @@ def summarize_text(text):
 
     except:
         return text
-
 
 def detect_bad_words(text):
     found = []
@@ -184,24 +149,20 @@ st.write(
 
 # CSV Status
 if csv_bad_words:
-    st.success(
-        f"CSV Loaded Successfully ({len(csv_bad_words)} words)"
-    )
+    st.success(f"CSV Loaded Successfully ({len(csv_bad_words)} words)")
 else:
-    st.warning(
-        "CSV not found. Keep english_hindi_badwords_500.csv in same folder."
-    )
+    st.warning("CSV file not found. Keep english_hindi_badwords_500.csv in same folder.")
 
-# Text input
+# Input
 text = st.text_area(
     "Enter Text Here:",
     height=220,
-    placeholder="Type your paragraph here..."
+    placeholder="Type paragraph here..."
 )
 
 # Language
 output_lang = st.selectbox(
-    "Choose Output Summary Language",
+    "Choose Output Language",
     ["English", "Hindi", "Hinglish"]
 )
 
@@ -214,28 +175,20 @@ if st.button("Generate Summary 🚀"):
         st.warning("Please enter some text.")
         st.stop()
 
-    original = text
     working = text
 
-    # Hinglish → English
-    if is_hinglish(working):
-        working = translate_text(
-            working,
-            "en"
-        )
+    # Hindi/Hinglish → English
+    if contains_hindi(text):
+        working = translate_text(text, "en")
 
-    # Hindi → English
-    elif contains_hindi(working):
-        working = translate_text(
-            working,
-            "en"
-        )
+    else:
+        working = translate_text(text, "en")
 
     # Summarize
-    with st.spinner("Generating summary..."):
+    with st.spinner("Generating Summary..."):
         summary = summarize_text(working)
 
-    # Output Language
+    # Convert Output Language
     if output_lang == "Hindi":
         summary = translate_text(summary, "hi")
 
@@ -255,9 +208,9 @@ if st.button("Generate Summary 🚀"):
     st.success(summary)
 
     # Safety Check
-    bad_words = detect_bad_words(original)
-
     st.subheader("🛡 Language Safety Check")
+
+    bad_words = detect_bad_words(text)
 
     if bad_words:
         st.error("⚠ Unparliamentary Language Detected")
@@ -267,4 +220,4 @@ if st.button("Generate Summary 🚀"):
 
 # Footer
 st.markdown("---")
-st.caption("Developed using Streamlit + NLP + Transformers")
+st.caption("Developed using Streamlit + Transformers + NLP")
